@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - YOLO_MODEL_PATH=${YOLO_MODEL_PATH:-best.pt}
+    volumes:
+      # Mount local model file for development (optional)
+      - ./backend/best.pt:/app/best.pt:ro
+    restart: unless-stopped
