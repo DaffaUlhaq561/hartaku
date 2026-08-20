@@ -10,6 +10,11 @@ import { renderPricingModal } from './components/PricingModal.js';
 import { renderScanVerificationModal } from './components/ScanVerificationModal.js';
 import { renderEditItemModal } from './components/EditItemModal.js';
 
+// Configurable backend base URL. Priority: `window.HARTAKU_API_BASE` -> Vite `import.meta.env.VITE_API_BASE` -> localhost
+const API_BASE = (typeof window !== 'undefined' && window.HARTAKU_API_BASE)
+  || (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
+  || 'http://localhost:8000';
+
 // ─── State Management ──────────────────────────────────────────────────────────
 
 function loadInitialItems() {
@@ -230,7 +235,7 @@ async function handleDirectScan(file) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch('http://localhost:8000/scan', {
+    const response = await fetch(`${API_BASE}/scan`, {
       method: 'POST',
       body: formData
     });
@@ -278,7 +283,7 @@ async function handleDirectScan(file) {
   } catch (err) {
     console.error('API Scan Error:', err);
     state.isScanning = false;
-    showToast('⚠️ Gagal terhubung ke Backend FastAPI (http://localhost:8000/scan). Pastikan uvicorn berjalan.', 'error');
+    showToast(`⚠️ Gagal terhubung ke Backend FastAPI (${API_BASE}/scan). Pastikan backend ter-deploy dan dapat dijangkau.`, 'error');
   }
 
   renderApp();

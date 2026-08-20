@@ -31,7 +31,7 @@ app = FastAPI(
 # Enable CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production as needed
+    allow_origins=[os.getenv("FRONTEND_ORIGIN", "https://hartaku-production.up.railway.app")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -193,4 +193,4 @@ if __name__ == "__main__":
     import uvicorn
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run("main:app", host=host, port=port, reload=True)
+    uvicorn.run("main:app", host=host, port=port)
