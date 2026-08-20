@@ -135,6 +135,7 @@ export function renderPassbookDashboard({
             </button>
           </div>
         </td>
+        <td class="bg-[#f7f3e8]"></td>
       </tr>
     `;
   }).join('');
@@ -259,20 +260,21 @@ export function renderPassbookDashboard({
 
       <!-- Buku Tabungan Ledger Table -->
       <div class="passbook-page border-x border-b border-[#c0c8c3] rounded-b-2xl overflow-hidden shadow-md">
-        <div class="overflow-x-auto custom-scrollbar">
+        <div class="overflow-x-auto custom-scrollbar" style="background-color: #00261a;">
           <table class="w-full min-w-full text-left border-collapse">
             <thead class="bg-[#00261a] text-emerald-200 font-mono text-xs uppercase tracking-wider border-b border-emerald-800">
               <tr class="bg-[#00261a]">
-                <th class="py-3.5 px-3 bg-[#00261a]">NO. SERI</th>
-                <th class="py-3.5 px-3 bg-[#00261a]">TGL SCAN</th>
+                <th class="py-3.5 px-3 bg-[#00261a] whitespace-nowrap">NO. SERI</th>
+                <th class="py-3.5 px-3 bg-[#00261a] whitespace-nowrap">TGL SCAN</th>
                 <th class="py-3.5 px-3 bg-[#00261a]">NAMA BARANG & LOKASI</th>
-                <th class="py-3.5 px-3 bg-[#00261a]">KATEGORI</th>
-                <th class="py-3.5 px-3 bg-[#00261a]">STATUS UNIFORM</th>
-                <th class="py-3.5 px-3 text-right bg-[#00261a]">ESTIMASI PASAR</th>
-                <th class="py-3.5 px-3 text-right bg-[#00261a]">AKSI</th>
+                <th class="py-3.5 px-3 bg-[#00261a] whitespace-nowrap">KATEGORI</th>
+                <th class="py-3.5 px-3 bg-[#00261a] whitespace-nowrap">STATUS UNIFORM</th>
+                <th class="py-3.5 px-3 text-right bg-[#00261a] whitespace-nowrap">ESTIMASI PASAR</th>
+                <th class="py-3.5 px-3 text-right bg-[#00261a] whitespace-nowrap">AKSI</th>
+                <th class="bg-[#00261a] w-full"></th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-dashed divide-[#c0c8c3] font-sans">
+            <tbody class="divide-y divide-dashed divide-[#c0c8c3] font-sans" style="background-color: #f7f3e8;">
               ${rowsHTML}
             </tbody>
           </table>
