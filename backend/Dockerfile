@@ -9,11 +9,11 @@ RUN apt-get update \
 WORKDIR /app
 
 # Install Python deps
-COPY backend/requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy backend source
-COPY backend /app
+# Copy backend source (build context is ./backend)
+COPY . /app
 
 # Expose port (Railway / container platform will map externally)
 ENV PORT=8000
