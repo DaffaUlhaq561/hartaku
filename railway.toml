@@ -1,29 +1,44 @@
 # ============================================================
-# Railway.app Configuration (RECOMMENDED: USE DOCKERFILE!)
-# Pilih salah satu builder.
-#
-# OPSI A (LEBIH STABIL) → pakai Dockerfile backend/Dockerfile
-# OPSI B (fallback)     → pakai Nixpacks + backend/nixpacks.toml
+# Railway.app Configuration
+# ⚠️ JANGAN SAMPAI Railway pilih "railpack" (auto detect). Kita FORCE pilih DOCKERFILE!
+# Jika Railway masih pakai railpack meskipun ini: DELETE service lalu CREATE ULANG.
 # ============================================================
 
-# ===== OPSI A: GUNAKAN DOCKERFILE (REKOMENDASI KITA) =====
 [build]
+  # "dockerfile" | "nixpacks". JANGAN pakai "railpack".
   builder = "dockerfile"
   dockerfilePath = "backend/Dockerfile"
-  dockerContext = "./backend"  # build context = folder backend/
-
-# ===== OPSI B: FALLBACK JIKA DOCKERFILE TIDAK KEDETECT =====
-# Jika builder = "nixpacks", uncomment line dibawah:
-# [build]
-#   builder = "nixpacks"
-#   nixpacksConfig = "./backend/nixpacks.toml"
+  # Build context = repo root, karena dockerfile = backend/Dockerfile COPY ../ ?
+  # Kalau Root Directory Railway = backend/ → pakai context ./
+  # Kalau Root Directory Railway = / (repo root) → context ./ tapi COPY backend/...
+  # Kita AMBIL KEDUA KEMUNGKINAN: Dockerfile sudah pakai WORKDIR /app, copy semua . (file dari context)
+  dockerContext = "./backend"
 
 [deploy]
   startCommand = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
   healthcheckPath = "/health"
   healthcheckTimeout = 30
+  restartPolicyType = "on_failure"
 
+# Service-level config (sesuai Railway TOML spec v2)
 [[services]]
   name = "hartaku-backend"
-  startCommand = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
-  healthcheckPath = "/health"
+  # Service root directory = "./backend". JADI Railway menjalankan build dari dalam backend/.
+  rootDirectory = "./backend"
+  [services.build]
+    builder = "dockerfile"
+    # Karena rootDirectory = ./backend, dockerfile relative terhadap itu.
+    dockerfilePath = "./Dockerfile"
+    dockerContext = "."
+  [services.deploy]
+    startCommand = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    healthcheckPath = "/health"
+    healthcheckTimeout = 30
+  [[services.ports]]
+    port = 8000
+    type = "HTTP"
+  [services.env]
+    PORT = "8000"
+    QT_QPA_PLATFORM = "offscreen"
+    OPENCV_IO_ENABLE_OPENEXR = "1"
+    DISPLAY = ""

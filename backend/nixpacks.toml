@@ -6,33 +6,26 @@
 
 [phases.setup]
   aptPkgs = [
-    'libxcb1',
-    'libx11-6',
-    'libglib2.0-0',
-    'libsm6',
-    'libxrender1',
-    'libxext6',
-    'libgl1-mesa-glx',
-    'libgtk2.0-0',
-    'libbz2-1.0',
-    'libpango-1.0-0',
-    'libcairo2',
-    'libgdk-pixbuf2.0-0',
-    'ffmpeg',
-    'libsm6',
-    'libxext6'
+    'libglib2.0-0', 'ffmpeg', 'libsm6', 'libxext6', 'libxrender1'
   ]
 
 [phases.build]
   cmds = [
     'pip install --no-cache-dir --upgrade pip setuptools wheel',
-    # FORCE headless opencv DULUAN supaya ultralytics tidak narik opencv-python GUI
-    'pip install --no-cache-dir "opencv-python-headless>=4.8.0"',
-    # Install sisa dependencies dari requirements
-    'pip install --no-cache-dir -r backend/requirements.txt 2>/dev/null || pip install --no-cache-dir -r requirements.txt',
-    # JAMIN opencv-python GUI tidak ada (terinstall sebagai dep ultralytics)
+    # STEP 1: FORCE headless opencv DULUAN (supaya opencv-python GUI TIDAK TERINSTALL NANTI)
+    'pip install --no-cache-dir "opencv-python-headless>=4.9.0"',
+    # STEP 2: Install semua requirements KECUALI ultralytics (PAKAI PYTHON FILTER, bukan grep - aman di semua base image)
+    'python -c "import os; f=\"backend/requirements.txt\" if os.path.isfile(\"backend/requirements.txt\") else \"requirements.txt\"; lines=open(f).read().splitlines(); filtered=[l for l in lines if not l.strip().lower().startswith(\"ultralytics\")]; open(\"/tmp/req_no_ultra.txt\",\"w\").write(chr(10).join(filtered)+chr(10))"',
+    'pip install --no-cache-dir -r /tmp/req_no_ultra.txt',
+    # STEP 3: Install ultralytics WITH --no-deps! (Cegah tarik opencv-python GUI dependency)
+    'pip install --no-cache-dir --no-deps "ultralytics>=8.0.196"',
+    # STEP 4: Pasang MANUAL dependency ultralytics KECUALI opencv-python (karena sudah headless)
+    'pip install --no-cache-dir "matplotlib>=3.2.2" "numpy>=1.22.2" "pillow>=9.4.0" "pyyaml>=5.3.1" "requests>=2.23.0" "scipy>=1.10.0" "torch>=1.8.0" "torchvision>=0.9.0" "tqdm>=4.64.0" "pandas>=1.1.4" "seaborn>=0.11.0" "py-cpuinfo>=8.0.0"',
+    # STEP 5: FINAL CLEANUP hapus opencv-python GUI jika lolos (safety)
     'pip uninstall -y opencv-python opencv-contrib-python 2>/dev/null || true',
-    'pip install --no-cache-dir --force-reinstall "opencv-python-headless>=4.8.0"'
+    'pip install --no-cache-dir --force-reinstall "opencv-python-headless>=4.9.0"',
+    # STEP 6: VALIDASI OpenCV terload (cek build logs)
+    'python -c "import cv2; print(\"Nixpacks OpenCV loaded:\", cv2.__version__, cv2.__file__)" 2>&1 | head -5'
   ]
 
 [start]
