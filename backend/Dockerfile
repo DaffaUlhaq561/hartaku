@@ -56,9 +56,13 @@ RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix && mkdir -p /root/.loca
 # Step 10: Copy backend source
 COPY . /app
 
-# Use SHELL FORM CMD so $PORT env var injected by Railway is evaluated at runtime
-# (EXEC form ["uvicorn", ...] will NOT expand $PORT!)
+# Railway runtime note:
+# - Internal port di DALAM container SELALU 8000 (bukan Railway external PORT).
+# - Railway proxy akan meneruskan traffic dari <service>.up.railway.app:443
+#   ke port INTERNAL container=8000 secara otomatis (melalui [[services.ports]] di railway.toml
+#   atau auto-detect EXPOSE). Jadi TIDAK USAH expand ${PORT} di command — hardcode 8000 saja.
 ENV PORT=8000
 EXPOSE 8000
 
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Exec form (JSON) untuk OS signal handling yang benar + hilangkan warning JSONArgsRecommended
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

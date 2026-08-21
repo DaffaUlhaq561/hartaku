@@ -29,7 +29,9 @@
   ]
 
 [start]
-  cmd = 'cd backend 2>/dev/null || true && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}'
+  # Jangan pakai ${PORT:-8000} — uvicorn akan terima sebagai string literal.
+  # Port internal container selalu 8000; Railway proxy mapping otomatis.
+  cmd = 'cd backend 2>/dev/null || true && uvicorn main:app --host 0.0.0.0 --port 8000'
 
 [environment]
   QT_QPA_PLATFORM = 'offscreen'

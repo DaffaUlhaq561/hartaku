@@ -15,9 +15,12 @@
   dockerContext = "./backend"
 
 [deploy]
-  startCommand = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+  # ⚠️ JANGAN ADA ${PORT:-8000} di command! Ini akan dikirim sebagai literal ke uvicorn
+  # dan menyebabkan error: Invalid value for '--port': '${PORT:-8000}' is not a valid integer.
+  # Port INTERNAL container SELALU 8000, Railway proxy external PORT mapping otomatis.
+  startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
   healthcheckPath = "/health"
-  healthcheckTimeout = 30
+  healthcheckTimeout = 60
   restartPolicyType = "on_failure"
 
 # Service-level config (sesuai Railway TOML spec v2)
@@ -31,13 +34,15 @@
     dockerfilePath = "./Dockerfile"
     dockerContext = "."
   [services.deploy]
-    startCommand = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    # ⚠️ SELALU hardcode port 8000. Jangan pakai ${PORT}!
+    startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
     healthcheckPath = "/health"
-    healthcheckTimeout = 30
+    healthcheckTimeout = 60
   [[services.ports]]
     port = 8000
     type = "HTTP"
   [services.env]
+    # PORT environment variable - opsional, hanya untuk info app.
     PORT = "8000"
     QT_QPA_PLATFORM = "offscreen"
     OPENCV_IO_ENABLE_OPENEXR = "1"
