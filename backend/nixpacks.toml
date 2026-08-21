@@ -1,0 +1,44 @@
+# ============================================================
+# Nixpacks Builder Config (fallback jika Railway pakai Nixpacks
+# BUKAN Dockerfile). Ini akan memaksa apt install libxcb & friends
+# + pasang opencv-python-headless SEBELUM ultralytics diinstall.
+# ============================================================
+
+[phases.setup]
+  aptPkgs = [
+    'libxcb1',
+    'libx11-6',
+    'libglib2.0-0',
+    'libsm6',
+    'libxrender1',
+    'libxext6',
+    'libgl1-mesa-glx',
+    'libgtk2.0-0',
+    'libbz2-1.0',
+    'libpango-1.0-0',
+    'libcairo2',
+    'libgdk-pixbuf2.0-0',
+    'ffmpeg',
+    'libsm6',
+    'libxext6'
+  ]
+
+[phases.build]
+  cmds = [
+    'pip install --no-cache-dir --upgrade pip setuptools wheel',
+    # FORCE headless opencv DULUAN supaya ultralytics tidak narik opencv-python GUI
+    'pip install --no-cache-dir "opencv-python-headless>=4.8.0"',
+    # Install sisa dependencies dari requirements
+    'pip install --no-cache-dir -r backend/requirements.txt 2>/dev/null || pip install --no-cache-dir -r requirements.txt',
+    # JAMIN opencv-python GUI tidak ada (terinstall sebagai dep ultralytics)
+    'pip uninstall -y opencv-python opencv-contrib-python 2>/dev/null || true',
+    'pip install --no-cache-dir --force-reinstall "opencv-python-headless>=4.8.0"'
+  ]
+
+[start]
+  cmd = 'cd backend 2>/dev/null || true && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}'
+
+[environment]
+  QT_QPA_PLATFORM = 'offscreen'
+  OPENCV_IO_ENABLE_OPENEXR = '1'
+  DISPLAY = ''

@@ -11,9 +11,19 @@ import { renderScanVerificationModal } from './components/ScanVerificationModal.
 import { renderEditItemModal } from './components/EditItemModal.js';
 
 // Configurable backend base URL. Priority: `window.HARTAKU_API_BASE` -> Vite `import.meta.env.VITE_API_BASE` -> localhost
-const API_BASE = (typeof window !== 'undefined' && window.HARTAKU_API_BASE)
+const _raw_api_base = (typeof window !== 'undefined' && window.HARTAKU_API_BASE)
   || (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE)
   || 'http://localhost:8000';
+
+// SAFETY: normalize URL — strip ALL trailing slashes & whitespace, ensure protocol exists
+const API_BASE = (() => {
+  let u = (_raw_api_base || '').toString().trim();
+  // Remove trailing slashes
+  while (u.endsWith('/')) u = u.slice(0, -1);
+  // Ensure scheme (if missing, prefix https:// because this is prod default)
+  if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
+  return u;
+})();
 
 // ─── State Management ──────────────────────────────────────────────────────────
 
@@ -72,10 +82,10 @@ const state = {
 
 // ─── Toast Notification ─────────────────────────────────────────────────────────
 
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', durationMs = 3500) {
   state.toast = { message, type };
   renderApp();
-  setTimeout(() => { state.toast = null; renderApp(); }, 3500);
+  setTimeout(() => { state.toast = null; renderApp(); }, durationMs);
 }
 
 function renderToast() {
@@ -283,7 +293,18 @@ async function handleDirectScan(file) {
   } catch (err) {
     console.error('API Scan Error:', err);
     state.isScanning = false;
-    showToast(`⚠️ Gagal terhubung ke Backend FastAPI (${API_BASE}/scan). Pastikan backend ter-deploy dan dapat dijangkau.`, 'error');
+
+    // Provide specific, actionable troubleshooting based on error type
+    const isNetwork = !err || !err.message || err.message.includes('Failed to fetch') || err.message.includes('NetworkError');
+    const hint = isNetwork
+      ? `\n\n🛠️ TIPS: (1) Buka ${API_BASE}/health di tab baru — jika 502 = backend Railway crash, Redeploy With No Cache. (2) Cek di Railway Variables: FRONTEND_ORIGIN. (3) Vercel env: VITE_API_BASE=${API_BASE}.`
+      : `\n\nDetail error: ${(err && err.message) || err}`;
+
+    showToast(
+      `⚠️ Gagal terhubung ke Backend FastAPI (${API_BASE}/scan).${hint}`,
+      'error',
+      8000
+    );
   }
 
   renderApp();

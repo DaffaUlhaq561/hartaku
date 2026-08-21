@@ -11,16 +11,62 @@ from fastapi.responses import JSONResponse
 # pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
-try:
-    from scanner import run_yolo_scan, analyze_with_openai, get_yolo_model
-except ImportError:
-    from backend.scanner import run_yolo_scan, analyze_with_openai, get_yolo_model
-
-# Load environment variables from .env file
+# Load environment variables from .env file BEFORE module imports
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fastapi_app")
+
+# --- Force headless BEFORE importing scanner / ultralytics ---
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
+os.environ.setdefault("DISPLAY", "")
+
+# --- Import scanner SAFELY (never crash app on import failures) ---
+run_yolo_scan = None
+analyze_with_openai = None
+get_yolo_model = None
+_SCANNER_IMPORT_ERROR = None
+
+try:
+    from scanner import run_yolo_scan as _rys, analyze_with_openai as _awo, get_yolo_model as _gym
+    run_yolo_scan = _rys
+    analyze_with_openai = _awo
+    get_yolo_model = _gym
+    logger.info("scanner module imported successfully.")
+except Exception as _e:
+    _SCANNER_IMPORT_ERROR = _e
+    logger.error(f"CRITICAL: scanner module IMPORT FAILED (but app will keep running!): {type(_e).__name__}: {_e}")
+    try:
+        from backend.scanner import run_yolo_scan as _rys2, analyze_with_openai as _awo2, get_yolo_model as _gym2
+        run_yolo_scan = _rys2
+        analyze_with_openai = _awo2
+        get_yolo_model = _gym2
+        _SCANNER_IMPORT_ERROR = None
+        logger.info("scanner module imported via backend.scanner fallback.")
+    except Exception as _e2:
+        logger.error(f"scanner fallback import also failed: {type(_e2).__name__}: {_e2}")
+        # Provide DUMMY fallbacks so app still boots (scan endpoint will return graceful error)
+        def _dummy_run_yolo_scan(image_bytes, conf_threshold=0.40):
+            return {
+                "detected": False,
+                "detections": [],
+                "model_classes": [],
+                "yolo_error": f"scanner_import_failed: {_SCANNER_IMPORT_ERROR}"
+            }
+        def _dummy_analyze_with_openai(image_bytes, yolo_result):
+            return {
+                "status": "openai_disabled",
+                "message": f"Scanner module unavailable: {_SCANNER_IMPORT_ERROR}",
+                "corrected_item": "Tidak Terdeteksi",
+                "is_corrected": False
+            }
+        def _dummy_get_yolo_model():
+            raise RuntimeError(f"YOLO unavailable - scanner import failed: {_SCANNER_IMPORT_ERROR}")
+        run_yolo_scan = _dummy_run_yolo_scan
+        analyze_with_openai = _dummy_analyze_with_openai
+        get_yolo_model = _dummy_get_yolo_model
+
 
 app = FastAPI(
     title="Hartaku - Item Scanner API",
@@ -29,7 +75,7 @@ app = FastAPI(
 )
 
 def _parse_cors_origins(env_value: str) -> list:
-    """Parse comma-separated FRONTEND_ORIGIN list. Supports wildcard for Vercel previews via '*'.
+    """Parse comma-separated FRONTEND_ORIGIN list. Supports wildcard '*'.
     Falls back to localhost + common Railway/Vercel defaults if unset."""
     if env_value and env_value.strip():
         origins = [o.strip() for o in env_value.split(",") if o.strip()]
@@ -53,15 +99,23 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Pre-load model on startup to ensure fast first inference."""
+    """Pre-load model on startup to ensure fast first inference. ALWAYS succeeds (app must not crash)."""
+    logger.info("=" * 60)
     logger.info("Initializing FastAPI Backend...")
     logger.info(f"CORS allowed origins: {_cors_origins}")
+    if _SCANNER_IMPORT_ERROR:
+        logger.error(f"⚠️ Scanner unavailable at startup (import failed): {_SCANNER_IMPORT_ERROR}")
+        logger.error("App will still respond to / /health /scan — check libxcb / libGL fixes + opencv-python-headless")
     try:
-        model = get_yolo_model()
-        logger.info(f"YOLO model ready with {len(model.names)} classes.")
+        if get_yolo_model is None:
+            logger.warning("get_yolo_model not available")
+        else:
+            model = get_yolo_model()
+            logger.info(f"✅ YOLO model ready with {len(model.names)} classes.")
     except Exception as e:
-        logger.warning(f"Could not pre-load YOLO model on startup: {e}")
-        logger.warning("Scan endpoint will still work, but first request may be slow.")
+        logger.warning(f"Could not pre-load YOLO model on startup: {type(e).__name__}: {e}")
+        logger.warning("Scan endpoint will still work (will rely on OpenAI fallback only).")
+    logger.info("=" * 60)
 
 
 @app.get("/")
@@ -81,6 +135,8 @@ async def root():
         "status": "online",
         "service": "Hartaku Item Scanner API",
         "yolo_model": os.getenv("YOLO_MODEL_PATH", "best.pt"),
+        "scanner_import_ok": _SCANNER_IMPORT_ERROR is None,
+        "scanner_import_error": str(_SCANNER_IMPORT_ERROR) if _SCANNER_IMPORT_ERROR else None,
         "openai_configured": has_openai,
         "openai_model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         "cors_origins": [_mask(o) for o in _cors_origins],
@@ -94,14 +150,20 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Detailed health status."""
-    return {"status": "ok", "timestamp": time.time()}
+    """Detailed health status. Returns 200 as long as HTTP server lives."""
+    return {
+        "status": "ok",
+        "timestamp": time.time(),
+        "scanner_import": ("ok" if _SCANNER_IMPORT_ERROR is None else f"failed: {_SCANNER_IMPORT_ERROR}")
+    }
 
 
 @app.get("/classes")
 async def get_model_classes():
     """Get all classes trained inside best.pt model."""
     try:
+        if get_yolo_model is None:
+            raise RuntimeError("YOLO unavailable (scanner import failed)")
         model = get_yolo_model()
         return {
             "success": True,
@@ -120,31 +182,24 @@ async def scan_item(
 ):
     """
     Endpoint utama untuk scan gambar barang.
-    
-    1. Memindai gambar menggunakan model YOLO `best.pt`.
-    2. Jika barang TIDAK terdeteksi oleh `best.pt` -> menggunakan OpenAI Vision API.
-    3. Jika barang terdeteksi oleh `best.pt` -> memverifikasi & membenarkan jika YOLO salah mengenali barang.
+    Graceful degradation: jika YOLO fail, cuma pakai OpenAI fallback.
     """
     # 1. Validasi tipe file
-    if not file.content_type.startswith("image/"):
+    if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File harus berupa gambar (JPEG, PNG, WEBP, dll).")
 
     try:
-        # Baca byte gambar
         image_bytes = await file.read()
         if len(image_bytes) == 0:
             raise HTTPException(status_code=400, detail="File gambar kosong.")
 
-        # Ambil threshold dari query / env
         if conf_threshold is None:
             conf_threshold = float(os.getenv("YOLO_CONF_THRESHOLD", "0.40"))
 
         start_time = time.time()
 
-        # 2. Jalankan deteksi YOLO
         yolo_result = run_yolo_scan(image_bytes, conf_threshold=conf_threshold)
 
-        # 3. Jalankan analisis OpenAI (fallback jika barang tidak ada, atau verifikasi/koreksi jika ada)
         openai_result = None
         source = "yolo"
         final_item_name = "Tidak Terdeteksi"
@@ -155,6 +210,9 @@ async def scan_item(
             if yolo_result["detected"]:
                 final_item_name = yolo_result["detections"][0]["label"]
                 source = "yolo_unverified"
+            elif yolo_result.get("yolo_error"):
+                final_item_name = "Scanner Error - Gunakan OpenAI"
+                source = "yolo_unavailable"
         else:
             openai_result = analyze_with_openai(image_bytes, yolo_result)
 
@@ -175,12 +233,14 @@ async def scan_item(
                 else:
                     source = "yolo_verified"
             else:
-                # OpenAI gagal / tidak dikonfigurasi
                 if yolo_result["detected"]:
                     final_item_name = yolo_result["detections"][0]["label"]
                     source = "yolo_unverified"
                 else:
                     source = "not_found"
+                    # Even if not found, we return OpenAI details if any for debugging
+                    if openai_result and openai_result.get("message"):
+                        details["message"] = openai_result.get("message")
 
         processing_time = round(time.time() - start_time, 3)
 
@@ -194,7 +254,8 @@ async def scan_item(
                 "yolo_detection": {
                     "detected": yolo_result["detected"],
                     "count": len(yolo_result["detections"]),
-                    "items": yolo_result["detections"]
+                    "items": yolo_result["detections"],
+                    "error": yolo_result.get("yolo_error")
                 },
                 "openai_analysis": details if openai_result else None,
                 "message": (
@@ -208,7 +269,7 @@ async def scan_item(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during scan: {e}", exc_info=True)
+        logger.error(f"Error during scan: {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan saat memproses scan: {str(e)}")
 
 

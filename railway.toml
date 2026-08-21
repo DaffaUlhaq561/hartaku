@@ -1,0 +1,29 @@
+# ============================================================
+# Railway.app Configuration (RECOMMENDED: USE DOCKERFILE!)
+# Pilih salah satu builder.
+#
+# OPSI A (LEBIH STABIL) → pakai Dockerfile backend/Dockerfile
+# OPSI B (fallback)     → pakai Nixpacks + backend/nixpacks.toml
+# ============================================================
+
+# ===== OPSI A: GUNAKAN DOCKERFILE (REKOMENDASI KITA) =====
+[build]
+  builder = "dockerfile"
+  dockerfilePath = "backend/Dockerfile"
+  dockerContext = "./backend"  # build context = folder backend/
+
+# ===== OPSI B: FALLBACK JIKA DOCKERFILE TIDAK KEDETECT =====
+# Jika builder = "nixpacks", uncomment line dibawah:
+# [build]
+#   builder = "nixpacks"
+#   nixpacksConfig = "./backend/nixpacks.toml"
+
+[deploy]
+  startCommand = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+  healthcheckPath = "/health"
+  healthcheckTimeout = 30
+
+[[services]]
+  name = "hartaku-backend"
+  startCommand = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+  healthcheckPath = "/health"
