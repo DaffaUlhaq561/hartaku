@@ -1,51 +1,47 @@
 # ============================================================
 # Railway.app Configuration - HARTaku Backend FastAPI
-# ⚠️ Internal Container Port = SELALU 8000 (uvicorn --port 8000)
-# Railway Domain harus mapping ke INTERNAL PORT 8000, BUKAN 8080!
+# ⚠️ HANYA PAKAI [[services]] LEVEL CONFIG!
+# JANGAN tambah top-level [build] / [deploy] — nanti Railway CONFLICT path.
+# rootDirectory = "./backend" = semua path di config ini RELATIVE terhadap ./backend
+# (jadi ./Dockerfile = backend/Dockerfile, ./requirements.txt = backend/requirements.txt)
 # ============================================================
-
-[build]
-  builder = "dockerfile"
-  dockerfilePath = "./Dockerfile"
-  dockerContext = "."
-
-[deploy]
-  # Port internal di DALAM container = 8000 (JANGAN DIUBAH!)
-  startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
-  healthcheckPath = "/health"
-  healthcheckTimeout = 120
-  restartPolicyType = "on_failure"
-  restartPolicyMaxRetries = 10
-
-# ============================================================
-# PERHATIAN: PORT HARUS 8000 (sesuai uvicorn listen --port 8000)
+# Internal Container Port = SELALU 8000 (uvicorn --port 8000 di Dockerfile CMD)
 # Jika di UI Railway Networking domain masih Port 8080:
 #   Klik EDIT domain itu → Target Port → Ubah ke 8000, Save.
 # ============================================================
+
 [[services]]
   name = "hartaku-backend"
+  # Semua build/deploy commands dijalankan DARI DALAM FOLDER ./backend
   rootDirectory = "./backend"
+
   [services.build]
+    # Builder = DOCKERFILE (bukan railpack / nixpacks).
     builder = "dockerfile"
+    # Karena rootDirectory = ./backend → ./Dockerfile disini = backend/Dockerfile (ADA! ✅)
     dockerfilePath = "./Dockerfile"
+    # Build context = current directory (yaitu ./backend karena rootDirectory = backend)
     dockerContext = "."
-    # Wajib no-cache untuk menghindari opencv-python GUI tersimpan di cache layer
-    # (Tidak semua versi Railway support ini, jadi tetap redeploy via UI: Redeploy WITHOUT cache)
-    # buildWithoutCache = true
+
   [services.deploy]
+    # Port internal di DALAM container = 8000 (JANGAN DIUBAH!)
     startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
     healthcheckPath = "/health"
+    # YOLO model cold start butuh ~40 detik. Timeout minimal 120s.
     healthcheckTimeout = 120
     restartPolicyType = "on_failure"
     restartPolicyMaxRetries = 10
+
   # SINGLE HTTP PORT yang benar: INTERNAL PORT CONTAINER = 8000!
   [[services.ports]]
     port = 8000
     type = "HTTP"
-    # expose public default true. Untuk UI network pastikan domain mengarah ke port 8000 ini.
+
   [services.env]
     PORT = "8000"
+    # Force Qt / OpenCV mode tanpa X11 (cegah libxcb crash bahkan di headless build)
     QT_QPA_PLATFORM = "offscreen"
     OPENCV_IO_ENABLE_OPENEXR = "1"
     DISPLAY = ""
+    # Logs Railway TIDAK TER-BUFFER — error terlihat secara REALTIME!
     PYTHONUNBUFFERED = "1"
