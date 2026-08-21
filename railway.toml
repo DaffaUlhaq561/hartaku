@@ -1,49 +1,51 @@
 # ============================================================
-# Railway.app Configuration
-# ⚠️ JANGAN SAMPAI Railway pilih "railpack" (auto detect). Kita FORCE pilih DOCKERFILE!
-# Jika Railway masih pakai railpack meskipun ini: DELETE service lalu CREATE ULANG.
+# Railway.app Configuration - HARTaku Backend FastAPI
+# ⚠️ Internal Container Port = SELALU 8000 (uvicorn --port 8000)
+# Railway Domain harus mapping ke INTERNAL PORT 8000, BUKAN 8080!
 # ============================================================
 
 [build]
-  # "dockerfile" | "nixpacks". JANGAN pakai "railpack".
   builder = "dockerfile"
-  dockerfilePath = "backend/Dockerfile"
-  # Build context = repo root, karena dockerfile = backend/Dockerfile COPY ../ ?
-  # Kalau Root Directory Railway = backend/ → pakai context ./
-  # Kalau Root Directory Railway = / (repo root) → context ./ tapi COPY backend/...
-  # Kita AMBIL KEDUA KEMUNGKINAN: Dockerfile sudah pakai WORKDIR /app, copy semua . (file dari context)
-  dockerContext = "./backend"
+  dockerfilePath = "./Dockerfile"
+  dockerContext = "."
 
 [deploy]
-  # ⚠️ JANGAN ADA ${PORT:-8000} di command! Ini akan dikirim sebagai literal ke uvicorn
-  # dan menyebabkan error: Invalid value for '--port': '${PORT:-8000}' is not a valid integer.
-  # Port INTERNAL container SELALU 8000, Railway proxy external PORT mapping otomatis.
+  # Port internal di DALAM container = 8000 (JANGAN DIUBAH!)
   startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
   healthcheckPath = "/health"
-  healthcheckTimeout = 60
+  healthcheckTimeout = 120
   restartPolicyType = "on_failure"
+  restartPolicyMaxRetries = 10
 
-# Service-level config (sesuai Railway TOML spec v2)
+# ============================================================
+# PERHATIAN: PORT HARUS 8000 (sesuai uvicorn listen --port 8000)
+# Jika di UI Railway Networking domain masih Port 8080:
+#   Klik EDIT domain itu → Target Port → Ubah ke 8000, Save.
+# ============================================================
 [[services]]
   name = "hartaku-backend"
-  # Service root directory = "./backend". JADI Railway menjalankan build dari dalam backend/.
   rootDirectory = "./backend"
   [services.build]
     builder = "dockerfile"
-    # Karena rootDirectory = ./backend, dockerfile relative terhadap itu.
     dockerfilePath = "./Dockerfile"
     dockerContext = "."
+    # Wajib no-cache untuk menghindari opencv-python GUI tersimpan di cache layer
+    # (Tidak semua versi Railway support ini, jadi tetap redeploy via UI: Redeploy WITHOUT cache)
+    # buildWithoutCache = true
   [services.deploy]
-    # ⚠️ SELALU hardcode port 8000. Jangan pakai ${PORT}!
     startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
     healthcheckPath = "/health"
-    healthcheckTimeout = 60
+    healthcheckTimeout = 120
+    restartPolicyType = "on_failure"
+    restartPolicyMaxRetries = 10
+  # SINGLE HTTP PORT yang benar: INTERNAL PORT CONTAINER = 8000!
   [[services.ports]]
     port = 8000
     type = "HTTP"
+    # expose public default true. Untuk UI network pastikan domain mengarah ke port 8000 ini.
   [services.env]
-    # PORT environment variable - opsional, hanya untuk info app.
     PORT = "8000"
     QT_QPA_PLATFORM = "offscreen"
     OPENCV_IO_ENABLE_OPENEXR = "1"
     DISPLAY = ""
+    PYTHONUNBUFFERED = "1"
