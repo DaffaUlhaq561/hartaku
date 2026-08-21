@@ -28,10 +28,24 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for frontend integration
+def _parse_cors_origins(env_value: str) -> list:
+    """Parse comma-separated FRONTEND_ORIGIN list. Supports wildcard for Vercel previews via '*'.
+    Falls back to localhost + common Railway/Vercel defaults if unset."""
+    if env_value and env_value.strip():
+        origins = [o.strip() for o in env_value.split(",") if o.strip()]
+        if origins:
+            return origins
+    return [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://hartaku-production.up.railway.app",
+    ]
+
+_cors_origins = _parse_cors_origins(os.getenv("FRONTEND_ORIGIN", ""))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_ORIGIN", "https://hartaku-production.up.railway.app")],
+    allow_origins=_cors_origins if "*" not in _cors_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,11 +55,13 @@ app.add_middleware(
 async def startup_event():
     """Pre-load model on startup to ensure fast first inference."""
     logger.info("Initializing FastAPI Backend...")
+    logger.info(f"CORS allowed origins: {_cors_origins}")
     try:
         model = get_yolo_model()
         logger.info(f"YOLO model ready with {len(model.names)} classes.")
     except Exception as e:
         logger.warning(f"Could not pre-load YOLO model on startup: {e}")
+        logger.warning("Scan endpoint will still work, but first request may be slow.")
 
 
 @app.get("/")
@@ -54,12 +70,20 @@ async def root():
     openai_key = os.getenv("OPENAI_API_KEY", "").strip()
     has_openai = bool(openai_key and openai_key != "your_openai_api_key_here")
     
+    def _mask(orig):
+        if orig == "*":
+            return "*"
+        if len(orig) <= 12:
+            return orig
+        return orig[:6] + "..." + orig[-6:]
+
     return {
         "status": "online",
         "service": "Hartaku Item Scanner API",
         "yolo_model": os.getenv("YOLO_MODEL_PATH", "best.pt"),
         "openai_configured": has_openai,
         "openai_model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        "cors_origins": [_mask(o) for o in _cors_origins],
         "endpoints": {
             "health": "/health",
             "scan_item": "/scan",

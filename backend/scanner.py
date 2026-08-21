@@ -1,4 +1,10 @@
 import os
+
+# --- HEADLESS ENV SETUP (MUST RUN BEFORE ANY OpenCV / QT / Ultralytics IMPORTS ---
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
+os.environ.setdefault("DISPLAY", "")
+
 import io
 import base64
 import json

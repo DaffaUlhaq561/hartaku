@@ -9,7 +9,11 @@ services:
       - PORT=8000
       - HOST=0.0.0.0
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       - YOLO_MODEL_PATH=${YOLO_MODEL_PATH:-best.pt}
+      - YOLO_CONF_THRESHOLD=${YOLO_CONF_THRESHOLD:-0.40}
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:5173,http://localhost:3000}
+      - QT_QPA_PLATFORM=offscreen
     volumes:
       # Mount local model file for development (optional)
       - ./backend/best.pt:/app/best.pt:ro
